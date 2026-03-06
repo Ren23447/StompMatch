@@ -146,6 +146,7 @@
     </style>
 </head>
 <body>
+      <audio id="bgm" src="https://raw.githubusercontent.com/Ren23447/StompMatch/main/retrolarki.mp3" loop></audio>
     <div id="ui">
         <div class="player-info">
             <div id="p1-name" class="player-name">Player 1</div>
@@ -184,6 +185,55 @@
     <canvas id="gameCanvas"></canvas>
 
     <script>
+
+          const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+          function playTone(freq, type, duration, vol, freqEnd = null) {
+              if (audioCtx.state === 'suspended') audioCtx.resume();
+              const osc = audioCtx.createOscillator();
+              const gain = audioCtx.createGain();
+              
+              osc.type = type;
+              osc.connect(gain);
+              gain.connect(audioCtx.destination);
+              
+              osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+              if (freqEnd) {
+                  osc.frequency.exponentialRampToValueAtTime(freqEnd, audioCtx.currentTime + duration);
+              }
+              
+              gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+              gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+              
+              osc.start();
+              osc.stop(audioCtx.currentTime + duration);
+          }
+
+          function playJumpSound() {
+              playTone(200, 'triangle', 0.15, 0.05, 400); // Original jump
+          }
+
+          function playDamageSound() {
+              playTone(150, 'sawtooth', 0.2, 0.1, 50); // Harsh damage noise
+          }
+
+          function playPickupSound() {
+              playTone(600, 'sine', 0.1, 0.05, 1200);
+              setTimeout(() => playTone(800, 'sine', 0.2, 0.05, 1600), 100);
+          }
+
+          let bgmStarted = false;
+          window.addEventListener('keydown', () => {
+              if (!bgmStarted) {
+                  const bgm = document.getElementById('bgm');
+                  if(bgm) {
+                      bgm.volume = 0.3;
+                      bgm.play().catch(e => console.log('BGM play failed', e));
+                  }
+                  bgmStarted = true;
+              }
+          });
+  
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
@@ -318,12 +368,14 @@
                             this.jumps++;
                             this.jumpKeyPressed = true;
                             spawnParticles(this.x + this.width/2, this.y + this.height, '#fff', 5);
+                            playJumpSound();
                         } else if ((onLeftWall || onRightWall) && !this.wallJumped) {
                             this.vy = -this.jumpForce;
                             this.vx = onLeftWall ? this.speed : -this.speed;
                             this.wallJumped = true;
                             this.jumpKeyPressed = true;
                             spawnParticles(this.x + (onLeftWall ? 0 : this.width), this.y + this.height/2, '#fff', 8);
+                            playJumpSound();
                         }
                     }
                 } else {
@@ -384,11 +436,13 @@
                     this.powerupTimer = 0;
                     this.invulnerable = 60;
                     spawnParticles(this.x + this.width/2, this.y + this.height/2, '#fff', 20);
+                    playDamageSound();
                     return;
                 }
                 this.health = Math.max(0, this.health - amount);
                 this.invulnerable = 30; // iframe duration
                 spawnParticles(this.x + this.width/2, this.y + this.height/2, this.color, 15);
+                playDamageSound();
             }
 
             checkCollisions(platforms, isHorizontal) {
@@ -856,6 +910,7 @@
                 }
                 
                 if (pickedUp) {
+                    playPickupSound();
                     items.splice(i, 1);
                 }
             }
