@@ -167,6 +167,16 @@
             text-shadow: 6px 6px 0px #5555ff, -6px -6px 0px #ff5555;
             text-align: center;
             line-height: 1.5;
+            animation: glitch 1.5s infinite;
+        }
+
+        @keyframes glitch {
+            0% { text-shadow: 6px 6px 0px #5555ff, -6px -6px 0px #ff5555; transform: translate(0); }
+            20% { text-shadow: -6px -6px 0px #5555ff, 6px 6px 0px #ff5555; transform: translate(-2px, 2px); }
+            40% { text-shadow: 6px -6px 0px #5555ff, -6px 6px 0px #ff5555; transform: translate(2px, -2px); }
+            60% { text-shadow: -6px 6px 0px #5555ff, 6px -6px 0px #ff5555; transform: translate(-2px, -2px); }
+            80% { text-shadow: 6px 6px 0px #5555ff, -6px -6px 0px #ff5555; transform: translate(2px, 2px); }
+            100% { text-shadow: 6px 6px 0px #5555ff, -6px -6px 0px #ff5555; transform: translate(0); }
         }
         .menu-btn {
             font-family: 'Press Start 2P', monospace;
@@ -228,8 +238,31 @@
             margin: 30px 0;
         }
         input[type=range] {
+            -webkit-appearance: none;
             width: 300px;
+            background: transparent;
             cursor: pointer;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 24px;
+            width: 16px;
+            background: #fff;
+            border: 4px solid #5555ff;
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 2px 2px 0px #000;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 12px;
+            cursor: pointer;
+            background: #444;
+            border: 2px solid #fff;
+            box-shadow: inset 2px 2px 0px rgba(0,0,0,0.5);
+        }
+        input[type=range]:focus {
+            outline: none;
         }
         
         #ui, #controls-overlay, #gameCanvas {
@@ -247,6 +280,9 @@
         <button class="menu-btn" onclick="showDifficultyMenu()">Single Player</button>
         <button class="menu-btn" onclick="startGame('split')">Splitscreen</button>
         <button id="settings-btn" onclick="showSettings()">&#9881; SETTINGS</button>
+        <div style="position: absolute; bottom: 20px; text-align: center; width: 100%; font-size: 0.8rem; pointer-events: auto; z-index: 50;">
+            Created by <a href="mailto:yayuriren@gmail.com" style="color: #5555ff; text-decoration: none; pointer-events: auto;">Ren Hatsune</a>
+        </div>
     </div>
 
     <!-- Difficulty Menu -->
@@ -511,7 +547,7 @@
 
             
             botUpdate(target, platforms, items, difficulty) {
-                let smartness = 0.2 + (difficulty - 1) * 0.1; // 0.2 to 1.0
+                let smartness = 0.1 + (difficulty - 1) * 0.1; 
                 
                 if (this.botWait > 0) {
                     this.botWait--;
@@ -522,14 +558,13 @@
                     return;
                 }
                 
-                // Add hesitation at lower difficulties
                 if (Math.random() > smartness * 0.8 + 0.2) {
-                    this.botWait = Math.floor(Math.random() * (15 - difficulty));
+                    this.botWait = Math.floor(Math.random() * (20 - difficulty * 2));
                     return;
                 }
 
                 let targetObj = target;
-                if (smartness > 0.5 && items.length > 0) {
+                if (smartness > 0.4 && items.length > 0) {
                     let closestItem = null;
                     let minDist = Infinity;
                     for (let it of items) {
@@ -539,31 +574,63 @@
                             closestItem = it;
                         }
                     }
-                    if (minDist < Math.hypot(target.x - this.x, target.y - this.y)) {
+                    if (minDist < Math.hypot(target.x - this.x, target.y - this.y) || (this.health < 50 && closestItem && closestItem.type === 'health')) {
                         targetObj = closestItem;
                     }
                 }
 
-                let distX = targetObj.x - this.x;
-                let distY = targetObj.y - this.y;
+                let targetX = targetObj.x + (targetObj.width || 0) / 2;
+                let targetY = targetObj.y + (targetObj.height || 0) / 2;
+                
+                if (difficulty >= 7 && targetObj === target) {
+                    targetX += targetObj.vx * 15;
+                    targetY += targetObj.vy * 15;
+                }
 
-                if (distX > 30) {
-                    this.botRight = true;
-                    this.botLeft = false;
-                } else if (distX < -30) {
-                    this.botLeft = true;
-                    this.botRight = false;
+                let distX = targetX - (this.x + this.width / 2);
+                let distY = targetY - (this.y + this.height / 2);
+
+                this.botLeft = false;
+                this.botRight = false;
+                this.botJump = false;
+                this.botPower = false;
+
+                let onPlatform = platforms.find(p => this.x + this.width > p.x && this.x < p.x + p.width && Math.abs((this.y + this.height) - p.y) < 5);
+                let targetOnPlatform = platforms.find(p => targetObj.x + (targetObj.width||0) > p.x && targetObj.x < p.x + p.width && Math.abs((targetObj.y + (targetObj.height||0)) - p.y) < 5);
+
+                if (difficulty >= 5 && onPlatform && targetOnPlatform && onPlatform !== targetOnPlatform && targetY < this.y) {
+                    let dxToLeftEdge = this.x - onPlatform.x;
+                    let dxToRightEdge = (onPlatform.x + onPlatform.width) - this.x;
+                    
+                    if (targetX < onPlatform.x) {
+                        this.botLeft = true;
+                    } else if (targetX > onPlatform.x + onPlatform.width) {
+                        this.botRight = true;
+                    } else {
+                        if (dxToLeftEdge < dxToRightEdge) {
+                            this.botLeft = true;
+                            if (dxToLeftEdge < 20) this.botJump = true; 
+                        } else {
+                            this.botRight = true;
+                            if (dxToRightEdge < 20) this.botJump = true; 
+                        }
+                    }
                 } else {
-                    if (Math.random() > 0.5) {
-                        this.botLeft = false;
-                        this.botRight = false;
+                    if (distX > 20) {
+                        this.botRight = true;
+                    } else if (distX < -20) {
+                        this.botLeft = true;
                     }
                 }
 
-                this.botJump = false;
-                // Jump if target is above us, or randomly if stuck/moving
-                if (distY < -40 && Math.random() < smartness * 0.5) {
-                    this.botJump = true;
+                if (distY < -30) { 
+                    if (this.vx === 0 && (this.botLeft || this.botRight) && !this.grounded) {
+                        this.botJump = true; 
+                    } else if (this.grounded && Math.random() < smartness) {
+                        this.botJump = true;
+                    } else if (!this.grounded && this.vy > 0 && this.jumps < this.maxJumps && Math.random() < smartness) {
+                        this.botJump = true;
+                    }
                 }
 
                 if ((this.botLeft || this.botRight) && Math.abs(this.vx) < 0.5 && this.grounded) {
@@ -571,10 +638,9 @@
                         this.botJump = true;
                     }
                 }
-
-                this.botPower = false;
-                if (this.weapon === 'blaster' && Math.random() < smartness * 0.3) {
-                    if (Math.abs(distY) < 50) {
+                
+                if (this.weapon === 'blaster' && Math.random() < smartness * 0.5) {
+                    if (Math.abs(distY) < 40) { 
                         if ((this.facingRight && distX > 0) || (!this.facingRight && distX < 0)) {
                             this.botPower = true;
                         }
